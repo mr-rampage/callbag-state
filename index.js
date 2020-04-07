@@ -9,18 +9,23 @@ import remember from 'callbag-remember';
 import sampleCombine from 'callbag-sample-combine';
 import startWith from 'callbag-start-with';
 import makeSubject from 'callbag-subject';
+import {getValue, identity} from './lib/utils';
+import fromAny from './lib/from';
+import flatMap from 'callbag-flat-map';
+import operate from 'callbag-operate';
+import distinctUntilChanged from 'callbag-distinct-until-changed';
 
-export default function createStore(reducer, initialState = {}) {
+export default function createStore(reducer, initialState = {}, middleware = identity) {
   validateArguments(reducer);
 
   const action$ = makeSubject();
   const reducer$ = makeBehaviorSubject(reducer);
-  const state$ = makeState$(action$, reducer$)(initialState);
+  const state$ = makeState$(action$, reducer$, middleware)(initialState);
 
   return {
     subscribe: listener => observe(listener)(state$),
     dispatch: action => action$(1, action),
-    getState: currentState(state$),
+    getState: getValue(state$),
     replaceReducer: reducer => reducer$(1, reducer)
   }
 }
@@ -31,23 +36,31 @@ function validateArguments(reducer) {
   }
 }
 
-function makeState$(action$, reducer$) {
+function makeState$(action$, reducer$, middleware) {
   return initialState => {
     const stateProxy = makeProxy();
     const state$ = pipe(
       action$,
-      sampleCombine(latest(combine(reducer$, stateProxy))),
-      map(([action, [reducer, state]]) => reducer(state, action)),
+      enhance(middleware),
+      reduce(reducer$, stateProxy),
       startWith(initialState),
+      distinctUntilChanged(),
       remember
-    )
+    );
     stateProxy.connect(state$);
     return state$;
   }
 }
 
-function currentState(state$) {
-  let currentState;
-  observe(state => currentState = state)(state$);
-  return () => currentState;
+function enhance(enhancer) {
+  return operate(
+    flatMap(action => fromAny(enhancer(action)), (_, action) => action),
+  )
+}
+
+function reduce(reducer$, state$) {
+  return operate(
+    sampleCombine(latest(combine(reducer$, state$))),
+    map(([action, [reducer, state]]) => reducer(state, action)),
+  );
 }
