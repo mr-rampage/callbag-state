@@ -9,7 +9,7 @@ import remember from 'callbag-remember';
 import sampleCombine from 'callbag-sample-combine';
 import startWith from 'callbag-start-with';
 import makeSubject from 'callbag-subject';
-import {getValue, identity} from './lib/utils';
+import { getValue, identity } from './lib/utils';
 import operate from 'callbag-operate';
 import distinctUntilChanged from 'callbag-distinct-until-changed';
 
@@ -18,14 +18,13 @@ export default function createStore(reducer, initialState = {}, middleware = () 
 
   const action$ = makeSubject();
   const reducer$ = makeBehaviorSubject(reducer);
-  const { state$, dispatch } = makeState$(action$, reducer$, middleware)(initialState);
-
-  return {
-    subscribe: listener => observe(listener)(state$),
-    dispatch,
-    getState: makeGetState(state$),
-    replaceReducer: reducer => reducer$(1, reducer)
-  }
+  const middleware$ = makeSubject();
+  const state$ = makeState$(action$, reducer$, middleware$)(initialState);
+  
+  const store = makeStore(state$, action$, reducer$);
+  middleware$(1, middleware(store));
+  
+  return store;
 }
 
 function validateArguments(reducer, middleware) {
@@ -38,25 +37,27 @@ function validateArguments(reducer, middleware) {
   }
 }
 
-function makeState$(action$, reducer$, middleware) {
+function makeState$(action$, reducer$, middleware$) {
   return initialState => {
-    const dispatch = makeDispatch(action$);
     const stateProxy = makeProxy();
     const state$ = pipe(
       action$,
-      enhancer(middleware, stateProxy, dispatch),
+      enhancer(middleware$),
       reducer(reducer$, stateProxy),
       startWith(initialState),
       distinctUntilChanged(),
       remember
     );
     stateProxy.connect(state$);
-    return { state$, dispatch };
+    return state$;
   }
 }
 
-function enhancer(middleware, state$, dispatch) {
-  return map((action) => middleware({ dispatch, getState: makeGetState(state$)})(action));
+function enhancer(middleware$) {
+  return operate(
+    sampleCombine(latest(middleware$)),
+    map(([action, enhancer]) => enhancer(action))
+  );
 }
 
 function reducer(reducer$, state$) {
@@ -66,12 +67,11 @@ function reducer(reducer$, state$) {
   );
 }
 
-function makeDispatch(action$) {
-  return action => {
-    action$(1, action);
-  }
-}
-
-function makeGetState(state$) {
-  return getValue(state$);
+function makeStore(state$, action$, reducer$) {
+  return Object.freeze({
+    subscribe: listener => observe(listener)(state$),
+    dispatch: action => action$(1, action),
+    getState: getValue(state$),
+    replaceReducer: reducer => reducer$(1, reducer)
+  });
 }

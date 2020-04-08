@@ -2,8 +2,10 @@ const test = require('tape');
 const createStore = require('.');
 
 function applyMiddleware(...middlewares) {
-  const [head, ...tail] = middlewares.reverse();
-  return deps => tail.reduce((f, g) => action => f(g(deps)(action)), head(deps));
+  return store => {
+    const pipeline = middlewares.map(middleware => middleware(store)).reverse();
+    return pipeline.reduce((f, g) => action => f(g(action)));
+  }
 }
 
 function ActionLogger(logger, ...extraArguments) {
@@ -14,11 +16,12 @@ function ActionLogger(logger, ...extraArguments) {
 }
 
 test('Redux API', assert => {
-  assert.plan(5);
+  assert.plan(6);
 
   const store = createStore(x => x);
   const methods = Object.keys(store);
 
+  assert.true(Object.isFrozen(store), 'should be frozen');
   assert.equals(methods.length, 4, 'should contain 4 methods');
   assert.true(methods.includes('subscribe'), 'should contain subscribe');
   assert.true(methods.includes('dispatch'), 'should contain dispatch');
@@ -63,12 +66,14 @@ test('Reducers', assert => {
 test('Middleware', assert => {
   assert.plan(1);
   const payloadReducer = (state, action) => action.payload;
-  const PayloadAppender = arg => () => action => ({ ...action, payload: [...action.payload, arg]});
+  const PayloadAppender = arg => store => action => ({ ...action, payload: [...action.payload, arg] });
 
   const middleware = applyMiddleware(
+    ActionLogger(console.log, 'middleware in:'),
     PayloadAppender('first'),
     PayloadAppender('second'),
     PayloadAppender('third'),
+    ActionLogger(console.log, 'middleware out:')
   );
 
   const store = createStore(payloadReducer, [], middleware);
