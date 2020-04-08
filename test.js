@@ -2,7 +2,15 @@ const test = require('tape');
 const createStore = require('.');
 
 function applyMiddleware(...middlewares) {
-  return middlewares.reduce((f, g) => (...args) => f(g(...args)));
+  const [head, ...tail] = middlewares.reverse();
+  return deps => tail.reduce((f, g) => action => f(g(deps)(action)), head(deps));
+}
+
+function ActionLogger(logger, ...extraArguments) {
+  return deps => action => {
+    logger.apply(null, [...extraArguments, action, deps.getState()]);
+    return action;
+  }
 }
 
 test('Redux API', assert => {
@@ -53,26 +61,22 @@ test('Reducers', assert => {
 });
 
 test('Middleware', assert => {
-  const appendReducer = (state, action) => action.payload ? [...state, action.payload] : state;
-  const middleware = applyMiddleware(
-    (action, state) => { console.log(action, state); return action; },
-    action => Promise.resolve(action)
-  );
-  const expectations = [[], ['Hello'], ['Hello', 'World']];
+  assert.plan(1);
+  const payloadReducer = (state, action) => action.payload;
+  const PayloadAppender = arg => () => action => ({ ...action, payload: [...action.payload, arg]});
 
-  const store = createStore(appendReducer, [], middleware);
+  const middleware = applyMiddleware(
+    PayloadAppender('first'),
+    PayloadAppender('second'),
+    PayloadAppender('third'),
+  );
+
+  const store = createStore(payloadReducer, [], middleware);
+  store.dispatch({ type: 'ADD_PAYLOAD', payload: ['init'] });
 
   store.subscribe(state => {
-    const expected = expectations.shift();
-    assert.deepEqual(state, expected, `should be equal to ${JSON.stringify(expected)}`);
-    if (expectations.length === 0) {
-      assert.end();
-    }
+    assert.deepEqual(state, ['init', 'first', 'second', 'third'], 'should process action through middleware chain');
   });
-
-  store.dispatch({});
-  store.dispatch({ type: 'ADD_PAYLOAD', payload: 'Hello' });
-  store.dispatch({ type: 'ADD_PAYLOAD', payload: 'World' });
 });
 
 test('Repace Reducer', assert => {

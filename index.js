@@ -10,57 +10,68 @@ import sampleCombine from 'callbag-sample-combine';
 import startWith from 'callbag-start-with';
 import makeSubject from 'callbag-subject';
 import {getValue, identity} from './lib/utils';
-import fromAny from './lib/from';
-import flatMap from 'callbag-flat-map';
 import operate from 'callbag-operate';
 import distinctUntilChanged from 'callbag-distinct-until-changed';
 
-export default function createStore(reducer, initialState = {}, middleware = identity) {
-  validateArguments(reducer);
+export default function createStore(reducer, initialState = {}, middleware = () => identity) {
+  validateArguments(reducer, middleware);
 
   const action$ = makeSubject();
   const reducer$ = makeBehaviorSubject(reducer);
-  const state$ = makeState$(action$, reducer$, middleware)(initialState);
+  const { state$, dispatch } = makeState$(action$, reducer$, middleware)(initialState);
 
   return {
     subscribe: listener => observe(listener)(state$),
-    dispatch: action => action$(1, action),
-    getState: getValue(state$),
+    dispatch,
+    getState: makeGetState(state$),
     replaceReducer: reducer => reducer$(1, reducer)
   }
 }
 
-function validateArguments(reducer) {
+function validateArguments(reducer, middleware) {
   if (typeof reducer !== 'function') {
     throw new Error('Expected the reducer to be a function.')
+  }
+
+  if (typeof middleware !== 'function') {
+    throw new Error('Expected the enhancer to be a function.')
   }
 }
 
 function makeState$(action$, reducer$, middleware) {
   return initialState => {
+    const dispatch = makeDispatch(action$);
     const stateProxy = makeProxy();
     const state$ = pipe(
       action$,
-      enhance(middleware),
-      reduce(reducer$, stateProxy),
+      enhancer(middleware, stateProxy, dispatch),
+      reducer(reducer$, stateProxy),
       startWith(initialState),
       distinctUntilChanged(),
       remember
     );
     stateProxy.connect(state$);
-    return state$;
+    return { state$, dispatch };
   }
 }
 
-function enhance(enhancer) {
-  return operate(
-    flatMap(action => fromAny(enhancer(action)), (_, action) => action),
-  )
+function enhancer(middleware, state$, dispatch) {
+  return map((action) => middleware({ dispatch, getState: makeGetState(state$)})(action));
 }
 
-function reduce(reducer$, state$) {
+function reducer(reducer$, state$) {
   return operate(
     sampleCombine(latest(combine(reducer$, state$))),
     map(([action, [reducer, state]]) => reducer(state, action)),
   );
+}
+
+function makeDispatch(action$) {
+  return action => {
+    action$(1, action);
+  }
+}
+
+function makeGetState(state$) {
+  return getValue(state$);
 }
