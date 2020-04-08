@@ -19,8 +19,8 @@ export default function createStore(reducer, initialState = {}, middleware = () 
   const action$ = makeSubject();
   const reducer$ = makeBehaviorSubject(reducer);
   const middleware$ = makeSubject();
-  const state$ = makeState$(action$, reducer$, middleware$)(initialState);
-  
+  const state$ = makeState$(action$, middleware$, reducer$)(initialState);
+
   const store = makeStore(state$, action$, reducer$);
   middleware$(1, middleware(store));
   
@@ -37,7 +37,7 @@ function validateArguments(reducer, middleware) {
   }
 }
 
-function makeState$(action$, reducer$, middleware$) {
+function makeState$(action$, middleware$, reducer$) {
   return initialState => {
     const stateProxy = makeProxy();
     const state$ = pipe(
