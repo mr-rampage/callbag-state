@@ -33,7 +33,7 @@
     "callbag-operate": "^1.0.0",
     "callbag-pipe": "^1.2.0",
     "callbag-proxy": "^1.1.0",
-    "callbag-remember": "^1.0.4",
+    "callbag-remember": "^2.0.0",
     "callbag-sample-combine": "^1.1.0",
     "callbag-start-with": "^3.1.0",
     "callbag-subject": "^2.1.0",
