@@ -5,7 +5,7 @@
   "main": "index.cjs.js",
   "module": "index.js",
   "scripts": {
-    "build": "rollup $npm_package_module -o $npm_package_main --f cjs --no-interop --external callbag-state",
+    "build": "rollup index.js -o index.cjs.js --f cjs --no-interop --external callbag-state",
     "pretest": "npm run build",
     "test": "tape test.js | tap-spec",
     "prepare": "npm test"
@@ -33,7 +33,7 @@
     "callbag-operate": "^1.0.0",
     "callbag-pipe": "^1.2.0",
     "callbag-proxy": "^1.1.0",
-    "callbag-remember": "^1.0.4",
+    "callbag-remember": "^2.0.0",
     "callbag-sample-combine": "^1.1.0",
     "callbag-start-with": "^3.1.0",
     "callbag-subject": "^2.1.0",

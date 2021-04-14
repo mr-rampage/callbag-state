@@ -46,7 +46,7 @@ function makeState$(action$, middleware$, reducer$) {
       reducer(reducer$, stateProxy),
       startWith(initialState),
       distinctUntilChanged(),
-      remember
+      remember.default
     );
     stateProxy.connect(state$);
     return state$;
